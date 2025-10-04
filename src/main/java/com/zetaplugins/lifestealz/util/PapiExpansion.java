@@ -39,6 +39,26 @@ public final class PapiExpansion extends PlaceholderExpansion {
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String identifier) {
         if (player == null || player.getPlayer() == null) return "PlayerNotFound";
+        if (identifier.startsWith("hearts_")) {
+            String targetName = identifier.substring("hearts_".length());
+            Player target = plugin.getServer().getPlayerExact(targetName);
+
+            if (target != null) {
+                AttributeInstance attribute = target.getAttribute(Attribute.MAX_HEATH);
+                if (attribute != null) {
+                    return String.valueOf((int) (attribute.getBaseValue() / 2));
+                }
+            }
+
+            // fall back to stored data if offline
+            OfflinePlayer offlineTarget = plugin.getServer().getOfflinePlayer(targetName);
+            if (offlineTarget != null) {
+                PlayerData data pluign.getStorage().load(offlineTarget.getUniqueId());
+                return String.valueOf((int) (data.getMaxHealth() / 2));
+            }
+
+            return "PlayerNotFound"
+        }
 
         switch (identifier) {
             case "name": {
