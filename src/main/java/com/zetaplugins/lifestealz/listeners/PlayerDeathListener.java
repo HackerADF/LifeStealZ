@@ -1,19 +1,23 @@
 package com.zetaplugins.lifestealz.listeners;
 
 import com.zetaplugins.lifestealz.events.death.*;
+import com.zetaplugins.lifestealz.util.BypassManager;
 import com.zetaplugins.lifestealz.util.CooldownManager;
 import com.zetaplugins.lifestealz.util.GracePeriodManager;
 import com.zetaplugins.lifestealz.util.MessageUtils;
 import com.zetaplugins.lifestealz.util.WebHookManager;
 import com.zetaplugins.lifestealz.events.*;
+import com.zetaplugins.zetacore.annotations.AutoRegisterListener;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.Nullable;
 import com.zetaplugins.lifestealz.LifeStealZ;
 import com.zetaplugins.lifestealz.util.customitems.CustomItemManager;
@@ -26,7 +30,10 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.zetaplugins.lifestealz.util.MaxHeartsManager.getMaxHearts;
+import static com.zetaplugins.lifestealz.util.customitems.CustomItemManager.DESPAWNABLE_KEY;
+import static com.zetaplugins.lifestealz.util.customitems.CustomItemManager.INVULNERABLE_KEY;
 
+@AutoRegisterListener
 public final class PlayerDeathListener implements Listener {
 
     private final LifeStealZ plugin;
@@ -71,6 +78,23 @@ public final class PlayerDeathListener implements Listener {
         double healthPerNaturalDeath = plugin.getConfig().getInt("heartsPerNaturalDeath") * 2;
         double healthToLoose = isDeathByPlayer ? healthPerKill : healthPerNaturalDeath;
 
+        // Check bypass first (takes priority over grace period)
+        boolean victimHasBypass = restrictedHeartLossByBypass(player);
+        boolean killerHasBypass = isDeathByPlayer && killer != null && restrictedHeartGainByBypass(killer);
+
+        if (victimHasBypass || killerHasBypass) {
+            ZPlayerBypassDeathEvent bypassEvent = 
+                    new ZPlayerBypassDeathEvent(event, killer, victimHasBypass, killerHasBypass);
+            Bukkit.getPluginManager().callEvent(bypassEvent);
+
+            if (!bypassEvent.isCancelled()) {
+                if (victimHasBypass) player.sendMessage(bypassEvent.getMessageToVictim());
+                if (killerHasBypass && killer != null) killer.sendMessage(bypassEvent.getMessageToKiller());
+                return; // Fully blocks heart loss/gain
+            }
+        }
+
+        // Check grace period (only if bypass doesn't apply)
         boolean victimInGracePeriod = restrictedHeartLossByGracePeriod(player);
         boolean killerInGracePeriod = isDeathByPlayer && restrictedHeartGainByGracePeriod(killer);
 
@@ -86,10 +110,12 @@ public final class PlayerDeathListener implements Listener {
             }
         }
 
+
         boolean preventKillerGain = false;
         boolean droppedAtKiller = false;
 
-        if (isDeathByPlayer && !killerInGracePeriod) {
+        if (isDeathByPlayer && !killerInGracePeriod && !killerHasBypass) {
+            
             if (handleHeartGainCooldown(event, player, killer, healthToLoose)) {
                 preventKillerGain = true;
                 if (plugin.getConfig().getBoolean("heartGainCooldown.dropOnCooldown")) {
@@ -105,7 +131,7 @@ public final class PlayerDeathListener implements Listener {
         }
 
         if (playerData.getMaxHealth() - healthToLoose <= minHearts) {
-            handleElimination(event, player, playerData, killer, isDeathByPlayer);
+            handleElimination(event, player, playerData, killer, isDeathByPlayer, healthToLoose, preventKillerGain, droppedAtKiller);
             return;
         }
 
@@ -224,7 +250,7 @@ public final class PlayerDeathListener implements Listener {
         }
     }
 
-    private void handleElimination(PlayerDeathEvent event, Player player, PlayerData playerData, Player killer, boolean isDeathByPlayer) {
+    private void handleElimination(PlayerDeathEvent event, Player player, PlayerData playerData, Player killer, boolean isDeathByPlayer, double healthToLoose, boolean preventKillerGain, boolean droppedAtKiller) {
         ZPlayerEliminationEvent eliminationEvent =
                 new ZPlayerEliminationEvent(event, killer);
         eliminationEvent.setShouldBanPlayer(!plugin.getConfig().getBoolean("disablePlayerBanOnElimination"));
@@ -259,6 +285,34 @@ public final class PlayerDeathListener implements Listener {
                     );
                 }
             }, 1L);
+
+            boolean heartRewardOnElimination = plugin.getConfig().getBoolean("heartRewardOnElimination", true);
+            if (heartRewardOnElimination) {
+                // Reward killer with hearts on elimination
+                if (isDeathByPlayer && killer != null) {
+                    boolean dropHeartsPlayer = plugin.getConfig().getBoolean("dropHeartsPlayer", true);
+                    if (!preventKillerGain && !droppedAtKiller && !dropHeartsPlayer) {
+                        boolean preventedByCooldown = handleHeartGainCooldown(event, player, killer, healthToLoose);
+                        boolean preventedByMax = false;
+                        if (!preventedByCooldown) {
+                            preventedByMax = handleMaxHeartsLimit(event, player, killer, healthToLoose);
+                        }
+                        if (!preventedByCooldown && !preventedByMax) {
+                            handleKillerHeartGainDirect(killer, healthToLoose);
+                        }
+                    } else {
+                        if (droppedAtKiller || dropHeartsPlayer) {
+                            dropHeartsNaturally(killer.getLocation(), (int) (healthToLoose / 2), CustomItemManager.createKillHeart());
+                        }
+                    }
+                } else if (!isDeathByPlayer) {
+                    // Natural death eliminations also drop hearts if enabled
+                    boolean dropHeartsNatural = plugin.getConfig().getBoolean("dropHeartsNatural", true);
+                    if (dropHeartsNatural) {
+                        dropHeartsNaturally(player.getLocation(), (int) (healthToLoose / 2), CustomItemManager.createNaturalDeathHeart());
+                    }
+                }
+            }
 
             if (!eliminationEvent.isShouldBanPlayer()) {
                 // Respawn with revive hearts instead of elimination
@@ -341,9 +395,16 @@ public final class PlayerDeathListener implements Listener {
     }
 
     private void dropHeartsNaturally(Location location, int amount, ItemStack itemStack) {
-        World world = location.getWorld();
+        PersistentDataContainer container = itemStack.getItemMeta().getPersistentDataContainer();
+        final boolean shouldHaveUnlimitedLifetime = container.has(DESPAWNABLE_KEY)
+                && !Boolean.TRUE.equals(container.get(DESPAWNABLE_KEY, PersistentDataType.BOOLEAN));
+        final boolean shouldBeInvulnerable = container.has(INVULNERABLE_KEY)
+                && Boolean.TRUE.equals(container.get(INVULNERABLE_KEY, PersistentDataType.BOOLEAN));
+
         for (int i = 0; i < amount; i++) {
-            world.dropItemNaturally(location, itemStack);
+            Item item =  location.getWorld().dropItemNaturally(location, itemStack);
+            if (shouldHaveUnlimitedLifetime) item.setUnlimitedLifetime(true);
+            if (shouldBeInvulnerable) item.setInvulnerable(true);
         }
     }
 
@@ -355,5 +416,15 @@ public final class PlayerDeathListener implements Listener {
     private boolean restrictedHeartGainByGracePeriod(Player player) {
         GracePeriodManager gracePeriodManager = plugin.getGracePeriodManager();
         return gracePeriodManager.isInGracePeriod(player) && !gracePeriodManager.getConfig().gainHearts();
+    }
+
+    private boolean restrictedHeartLossByBypass(Player player) {
+        BypassManager bypassManager = plugin.getBypassManager();
+        return bypassManager.hasBypass(player) && !bypassManager.getConfig().looseHearts();
+    }
+
+    private boolean restrictedHeartGainByBypass(Player player) {
+        BypassManager bypassManager = plugin.getBypassManager();
+        return bypassManager.hasBypass(player) && !bypassManager.getConfig().gainHearts();
     }
 }

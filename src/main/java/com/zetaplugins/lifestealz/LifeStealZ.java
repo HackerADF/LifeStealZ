@@ -1,18 +1,20 @@
 package com.zetaplugins.lifestealz;
 
 import com.zetaplugins.lifestealz.util.*;
+import com.zetaplugins.lifestealz.util.revive.ReviveTaskManager;
+import com.zetaplugins.zetacore.ZetaCorePlugin;
+import com.zetaplugins.zetacore.services.bStats.Metrics;
+import com.zetaplugins.zetacore.services.commands.AutoCommandRegistrar;
+import com.zetaplugins.zetacore.services.events.AutoEventRegistrar;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import com.zetaplugins.lifestealz.api.LifeStealZAPI;
 import com.zetaplugins.lifestealz.api.LifeStealZAPIImpl;
-import com.zetaplugins.lifestealz.util.*;
 import com.zetaplugins.lifestealz.caches.EliminatedPlayersCache;
 import com.zetaplugins.lifestealz.caches.OfflinePlayerCache;
-import com.zetaplugins.lifestealz.util.commands.CommandManager;
 import com.zetaplugins.lifestealz.util.customblocks.ReviveBeaconEffectManager;
 import com.zetaplugins.lifestealz.util.customitems.recipe.RecipeManager;
 import com.zetaplugins.lifestealz.util.geysermc.GeyserManager;
@@ -24,10 +26,10 @@ import com.zetaplugins.lifestealz.storage.SQLiteStorage;
 import com.zetaplugins.lifestealz.util.worldguard.WorldGuardManager;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
-public final class LifeStealZ extends JavaPlugin {
+public final class LifeStealZ extends ZetaCorePlugin {
+    private static final String PACKAGE_PREFIX = "com.zetaplugins.lifestealz";
 
     private VersionChecker versionChecker;
     private Storage storage;
@@ -39,15 +41,15 @@ public final class LifeStealZ extends JavaPlugin {
     private GeyserPlayerFile geyserPlayerFile;
     private WebHookManager webHookManager;
     private GracePeriodManager gracePeriodManager;
+    private BypassManager bypassManager;
     private EliminatedPlayersCache eliminatedPlayersCache;
     private OfflinePlayerCache offlinePlayerCache;
     private AsyncTaskManager asyncTaskManager;
     private ReviveBeaconEffectManager reviveBeaconEffectManager;
+    private ReviveTaskManager reviveTaskManager;
     private final boolean hasWorldGuard = Bukkit.getPluginManager().getPlugin("WorldGuard") != null;
     private final boolean hasPlaceholderApi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
     private final boolean hasGeyser = Bukkit.getPluginManager().getPlugin("floodgate") != null;
-
-    public static Map<Location, ReviveTask> reviveTasks = new HashMap<>();
 
     @Override
     public void onLoad() {
@@ -57,7 +59,7 @@ public final class LifeStealZ extends JavaPlugin {
             getLogger().severe("---------------------------------------------------");
             getLogger().severe("LifeStealZ does not support Spigot or Bukkit!");
             getLogger().severe("Please use Paper or any fork of Paper (like Purpur). If you need further assistance, please join our Discord server:");
-            getLogger().severe("https://dc.lifestealz.com/");
+            getLogger().severe("https://strassburger.org/discord");
             getLogger().severe("---------------------------------------------------");
         }
 
@@ -81,6 +83,7 @@ public final class LifeStealZ extends JavaPlugin {
 
         asyncTaskManager = new AsyncTaskManager();
         reviveBeaconEffectManager = new ReviveBeaconEffectManager(this);
+        reviveTaskManager = new ReviveTaskManager();
 
         languageManager = new LanguageManager(this);
         configManager = new ConfigManager(this);
@@ -93,14 +96,17 @@ public final class LifeStealZ extends JavaPlugin {
 
         versionChecker = new VersionChecker(this, "l8Uv7FzS");
         gracePeriodManager = new GracePeriodManager(this);
+        bypassManager = new BypassManager(this);
         webHookManager = new WebHookManager(this);
 
         eliminatedPlayersCache = new EliminatedPlayersCache(this);
         offlinePlayerCache = new OfflinePlayerCache(this);
 
-        new CommandManager(this).registerCommands();
+        List<String> registeredCommands = new AutoCommandRegistrar(this, PACKAGE_PREFIX).registerAllCommands();
+        getLogger().info("Registered " + registeredCommands.size() + " commands");
 
-        new EventManager(this).registerListeners();
+        List<String> registeredEvents = new AutoEventRegistrar(this, PACKAGE_PREFIX).registerAllListeners();
+        getLogger().info("Registered " + registeredEvents.size() + " event listeners");
 
         initializeBStats();
 
@@ -139,6 +145,10 @@ public final class LifeStealZ extends JavaPlugin {
         return reviveBeaconEffectManager;
     }
 
+    public ReviveTaskManager getReviveTaskManager() {
+        return reviveTaskManager;
+    }
+
     public VersionChecker getVersionChecker() {
         return versionChecker;
     }
@@ -165,6 +175,10 @@ public final class LifeStealZ extends JavaPlugin {
 
     public GracePeriodManager getGracePeriodManager() {
         return gracePeriodManager;
+    }
+
+    public BypassManager getBypassManager() {
+        return bypassManager;
     }
 
     public GeyserManager getGeyserManager() {
@@ -225,7 +239,7 @@ public final class LifeStealZ extends JavaPlugin {
 
     private void initializeBStats() {
         int pluginId = 18735;
-        Metrics metrics = new Metrics(this, pluginId);
+        Metrics metrics = createBStatsMetrics(pluginId);
 
         metrics.addCustomChart(new Metrics.SimplePie("storage_type", () -> getConfigManager().getStorageConfig().getString("type")));
         metrics.addCustomChart(new Metrics.SimplePie("language", () -> getConfig().getString("lang")));

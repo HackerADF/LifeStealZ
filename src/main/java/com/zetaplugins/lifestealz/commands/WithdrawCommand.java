@@ -1,5 +1,6 @@
 package com.zetaplugins.lifestealz.commands;
 
+import com.zetaplugins.zetacore.annotations.AutoRegisterCommand;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
@@ -19,6 +20,7 @@ import com.zetaplugins.lifestealz.storage.PlayerData;
 
 import java.util.List;
 
+@AutoRegisterCommand(command = "withdrawheart")
 public final class WithdrawCommand implements CommandExecutor, TabCompleter {
     private final LifeStealZ plugin;
 
@@ -28,11 +30,22 @@ public final class WithdrawCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
-        if (!(sender instanceof Player)) {
+        if (!(sender instanceof Player player)) {
             sender.sendMessage(MessageUtils.getAndFormatMsg(
                     false,
                     "needToBePlayer",
                     "&cYou need to be a player to execute this command!"
+            ));
+            return false;
+        }
+
+        boolean isInGracePeriod = plugin.getGracePeriodManager().isInGracePeriod(player);
+        boolean allowWithdrawInGrace = plugin.getConfig().getBoolean("gracePeriod.allowWithdraw", false);
+        if (isInGracePeriod && !allowWithdrawInGrace) {
+            sender.sendMessage(MessageUtils.getAndFormatMsg(
+                    false,
+                    "gracePeriodWithdraw",
+                    "&cYou cannot withdraw hearts while in the grace period!"
             ));
             return false;
         }
@@ -52,7 +65,6 @@ public final class WithdrawCommand implements CommandExecutor, TabCompleter {
 
         String confirmOption = args != null && args.length > 1 ? args[1] : null;
 
-        Player player = (Player) sender;
         PlayerData playerdata = plugin.getStorage().load(player.getUniqueId());
 
         boolean withdrawtoDeath = plugin.getConfig().getBoolean("allowDyingFromWithdraw");
@@ -91,9 +103,9 @@ public final class WithdrawCommand implements CommandExecutor, TabCompleter {
         }
 
         double resultingHealth = playerdata.getMaxHealth() - ((double) withdrawHearts * 2);
-        double minHealth = plugin.getConfig().getDouble("minHearts", 2.0) * 2; // Default to 2.0 if not set
+        double minHealth = plugin.getConfig().getDouble("minHearts", 0.0) * 2;
 
-        if (resultingHealth < minHealth) {
+        if (resultingHealth <= minHealth) {
             if (confirmOption == null || !confirmOption.equals("confirm")) {
                 sender.sendMessage(MessageUtils.getAndFormatMsg(
                         false,

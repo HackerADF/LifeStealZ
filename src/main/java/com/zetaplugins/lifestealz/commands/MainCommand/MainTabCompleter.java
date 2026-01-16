@@ -1,5 +1,6 @@
 package com.zetaplugins.lifestealz.commands.MainCommand;
 
+import com.zetaplugins.zetacore.annotations.AutoRegisterTabCompleter;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
@@ -13,6 +14,7 @@ import java.util.List;
 
 import static com.zetaplugins.lifestealz.util.commands.CommandUtils.*;
 
+@AutoRegisterTabCompleter(command = "lifestealz")
 public final class MainTabCompleter implements TabCompleter {
     private final LifeStealZ plugin;
 
@@ -35,9 +37,10 @@ public final class MainTabCompleter implements TabCompleter {
 
         List<String> options = new ArrayList<>();
         if (sender.hasPermission("lifestealz.admin.reload")) options.add("reload");
-        if (sender.hasPermission("lifestealz.admin.reload")) options.add("debug"); // debug doesnt need its own perm.
+        if (sender.hasPermission("lifestealz.admin.debug")) options.add("debug");
         if (sender.hasPermission("lifestealz.admin.setlife")) options.add("hearts");
         if (sender.hasPermission("lifestealz.admin.giveitem")) options.add("giveItem");
+        if (sender.hasPermission("lifestealz.admin.bypasscheck")) options.add("checkbypass");
         if (sender.hasPermission("lifestealz.viewrecipes")) options.add("recipe");
         if (sender.hasPermission("lifestealz.help")) options.add("help");
         if (sender.hasPermission("lifestealz.managedata")) options.add("data");
@@ -60,6 +63,10 @@ public final class MainTabCompleter implements TabCompleter {
             case "data":
                 if (sender.hasPermission("lifestealz.managedata")) return getDisplayOptions(List.of("import", "export"), input);
                 break;
+            case "checkbypass":
+                return getDisplayOptions(getPlayersTabCompletion(false, plugin), input);
+            case "debug":
+                return getDisplayOptions(List.of("upload", "generate"), input);
             case "dev":
                 return getDisplayOptions(List.of("giveForbiddenitem", "isInGracePeriod", "setFirstJoinDate", "refreshCaches", "crash", "cleardatabase", "giveAnimationTotem", "getEffectivePerms"), input);
         }

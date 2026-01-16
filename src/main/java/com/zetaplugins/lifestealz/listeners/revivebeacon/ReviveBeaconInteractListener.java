@@ -1,5 +1,6 @@
 package com.zetaplugins.lifestealz.listeners.revivebeacon;
 
+import com.zetaplugins.zetacore.annotations.AutoRegisterListener;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -9,9 +10,10 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import com.zetaplugins.lifestealz.LifeStealZ;
 import com.zetaplugins.lifestealz.util.GuiManager;
 import com.zetaplugins.lifestealz.util.MessageUtils;
-import com.zetaplugins.lifestealz.util.ReviveTask;
+import com.zetaplugins.lifestealz.util.revive.ReviveTask;
 import com.zetaplugins.lifestealz.util.customblocks.CustomBlock;
 
+@AutoRegisterListener
 public final class ReviveBeaconInteractListener implements Listener {
     private final LifeStealZ plugin;
 
@@ -30,7 +32,7 @@ public final class ReviveBeaconInteractListener implements Listener {
         Player player = event.getPlayer();
         event.setCancelled(true);
 
-        ReviveTask reviveTask = LifeStealZ.reviveTasks.get(block.getLocation());
+        ReviveTask reviveTask = plugin.getReviveTaskManager().getReviveTask(block.getLocation());
         if (reviveTask != null) {
             long nowSeconds = System.currentTimeMillis() / 1000L;
             int secondsLeft = (int) (reviveTask.start() + reviveTask.durationSeconds() - nowSeconds);

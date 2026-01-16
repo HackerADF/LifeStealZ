@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Item;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -51,12 +52,8 @@ public final class CustomItemManager {
                     .setEnchanted(config.getBoolean(itemId + ".enchanted"))
                     .setInvulnerable(config.getBoolean(itemId + ".invulnerable"))
                     .setDespawnable(config.getBoolean(itemId + ".despawnable"))
+                    .setId("lifestealz_" + itemId, config.getInt(itemId + ".customModelId", 0))
                     .addFlag(ItemFlag.HIDE_ATTRIBUTES);
-
-            ci.getItemStack().setData(
-                    DataComponentTypes.CUSTOM_MODEL_DATA,
-                    CustomModelData.customModelData().addString("lifestealz_" + itemId).build()
-            );
 
             ItemMeta itemMeta = ci.getItemStack().getItemMeta();
 

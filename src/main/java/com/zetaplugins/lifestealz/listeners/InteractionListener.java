@@ -1,6 +1,7 @@
 package com.zetaplugins.lifestealz.listeners;
 
 import com.zetaplugins.lifestealz.util.*;
+import com.zetaplugins.zetacore.annotations.AutoRegisterListener;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -21,6 +22,7 @@ import com.zetaplugins.lifestealz.storage.PlayerData;
 
 import java.util.List;
 
+@AutoRegisterListener
 public final class InteractionListener implements Listener {
     private final LifeStealZ plugin;
 
@@ -126,6 +128,15 @@ public final class InteractionListener implements Listener {
 
         if (customItemData.requiresPermission() && !player.hasPermission(customItemData.getPermission()) && !player.isOp() && !player.hasPermission("lifestealz.item.*")) {
             player.sendMessage(MessageUtils.getAndFormatMsg(false, "noPermissionError", "&cYou don't have permission to use this!"));
+            return;
+        }
+
+        if (restrictedHeartUseByBypass(player)) {
+            player.sendMessage(MessageUtils.getAndFormatMsg(
+                    false,
+                    "noHeartUseWithBypass",
+                    "&cYou can't use hearts with bypass permission!"
+            ));
             return;
         }
 
@@ -254,5 +265,9 @@ public final class InteractionListener implements Listener {
     private boolean restrictedHeartByGracePeriod(Player player) {
         GracePeriodManager gracePeriodManager = plugin.getGracePeriodManager();
         return gracePeriodManager.isInGracePeriod(player) && !gracePeriodManager.getConfig().useHearts();
+    }
+
+    private boolean restrictedHeartUseByBypass(Player player) {
+        return plugin.getBypassManager().hasBypass(player) && !plugin.getBypassManager().getConfig().useHearts();
     }
 }

@@ -1,5 +1,6 @@
 package com.zetaplugins.lifestealz.listeners.revivebeacon;
 
+import com.zetaplugins.zetacore.annotations.AutoRegisterListener;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -13,11 +14,12 @@ import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
 import com.zetaplugins.lifestealz.LifeStealZ;
 import com.zetaplugins.lifestealz.util.MessageUtils;
-import com.zetaplugins.lifestealz.util.ReviveTask;
+import com.zetaplugins.lifestealz.util.revive.ReviveTask;
 import com.zetaplugins.lifestealz.util.customblocks.CustomBlock;
 import com.zetaplugins.lifestealz.util.customitems.CustomItemManager;
 import com.zetaplugins.lifestealz.util.customitems.customitemdata.CustomReviveBeaconItemData;
 
+@AutoRegisterListener
 public final class ReviveBeaconBreakListener implements Listener {
     private final LifeStealZ plugin;
 
@@ -33,7 +35,7 @@ public final class ReviveBeaconBreakListener implements Listener {
         Player player = event.getPlayer();
         Location location = block.getLocation();
 
-        ReviveTask reviveTask = LifeStealZ.reviveTasks.get(location);
+        ReviveTask reviveTask = plugin.getReviveTaskManager().getReviveTask(location);
         if (reviveTask != null) {
             CustomReviveBeaconItemData itemData = new CustomReviveBeaconItemData(CustomBlock.REVIVE_BEACON.getCustomItemId(block));
             if (!itemData.isAllowBreakingBeaconWhileReviving()) {
@@ -47,8 +49,8 @@ public final class ReviveBeaconBreakListener implements Listener {
                 return;
             }
 
-            LifeStealZ.reviveTasks.remove(location);
             if (!reviveTask.task().isCancelled()) reviveTask.task().cancel();
+            plugin.getReviveTaskManager().removeReviveTask(location);
             location.getWorld().playSound(location, Sound.BLOCK_BEACON_DEACTIVATE, 1.0f, 1.0f);
             Player reviver = Bukkit.getPlayer(reviveTask.reviver());
             if (reviver != null && reviver.isOnline()) {

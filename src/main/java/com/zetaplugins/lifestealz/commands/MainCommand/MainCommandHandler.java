@@ -1,6 +1,7 @@
 package com.zetaplugins.lifestealz.commands.MainCommand;
 
 import com.zetaplugins.lifestealz.commands.MainCommand.subcommands.*;
+import com.zetaplugins.zetacore.annotations.AutoRegisterCommand;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -12,6 +13,7 @@ import com.zetaplugins.lifestealz.util.MessageUtils;
 import java.util.HashMap;
 import java.util.Map;
 
+@AutoRegisterCommand(command = "lifestealz")
 public final class MainCommandHandler implements CommandExecutor {
     private final LifeStealZ plugin;
     private final Map<String, SubCommand> commands = new HashMap<>();
@@ -26,6 +28,7 @@ public final class MainCommandHandler implements CommandExecutor {
         commands.put("giveItem", new GiveItemSubCommand(plugin));
         commands.put("data", new DataSubCommand(plugin));
         commands.put("graceperiod", new GracePeriodSubcommand(plugin));
+        commands.put("checkbypass", new BypassStatusSubCommand(plugin));
         commands.put("dev", new DevSubCommand(plugin));
         commands.put("debug", new DebugSubCommand(plugin));
     }
